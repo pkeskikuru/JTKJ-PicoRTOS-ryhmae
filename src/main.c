@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 
@@ -19,72 +18,58 @@
 #define LOOP_PERIOD 20          //morseTask loop period
 #define VALID_ROTATE_LOOPS 5      //how many loops required for a valid dot/dash symbol
 #define VALID_SPACE_LOOPS 50    //how many loops required in default position for 1 space
-#define VALID_ROTATE 0.5f         //accel_g value threshold for a valid dot/dash          AI?
-#define VALID_DEFAULT 0.25f     //max variance accel_g value for a default position     AI?
+#define VALID_ROTATE 10.0f         //gyro_dps value threshold for a valid dot/dash      AI used to help adjust value
+#define VALID_DEFAULT 2.0f     //max variance gyro_dps value for a default position     AI used to help adjust value
 
-volatile float accel_g[3];      //accelerometer values of x, y, z; converted to g units
-volatile char symbol = ' ';     //global variable for symbol to be sent to usbTask
+volatile float gyro_dps[3];      // gyroscope values of x, y, z in degrees per second
+volatile char symbol = ' ';     // global variable for symbol to be sent to usbTask
 volatile bool symbolready = false;  //flag for if next symbol is ready to be sent
 
 //Add here necessary states
 enum state { IDLE=1 };
 enum state programState = IDLE;
 
-static void example_task(void *arg){
-    (void)arg;
 
-    for(;;){
-        tight_loop_contents(); // Modify with application code here.
-        vTaskDelay(pdMS_TO_TICKS(2000));
-    }
-}
-
-static void imu_task(void *pvParameters)
+static void gyro_task(void *pvParameters)     // create gyro task
 {
-    (void)pvParameters;
+    (void)pvParameters;   // values as listed in ICM42670_read_sensor_data() in TKJHAT sdk.c
+    float ax, ay, az;   // acceleration values
+    float gx, gy, gz;   // gyro values
+    float t;            // temperature (listed in ICM42670_read_sensor_data() function but not used)
 
-    float ax, ay, az;
-    float gx, gy, gz;
-    float temperature;
-
-    // Initialize IMU sensor
-    if (init_ICM42670() != 0) {
-        printf("Failed to initialize ICM-42670P.\n");
+    if (init_ICM42670() != 0) {             // initialize gyro sensor
+        printf("Initialization failed.\n");   // if init fails, print error and delete task
         vTaskDelete(NULL);
     }
-
     if (ICM42670_start_with_default_values() != 0) {
-        printf("Failed to start ICM-42670P.\n");
+        printf("Failed to start.\n");        // if start with default values fails, print error and delete task
         vTaskDelete(NULL);
     }
 
-    TickType_t last_wake_time = xTaskGetTickCount();
+    TickType_t tickTime = xTaskGetTickCount();    // initialize tick time for later use
 
-    for (;;) {
+    for (;;) {      // infinite loop for the gyro task until the task is deleted or the program ends
+        if (ICM42670_read_sensor_data(  &ax, &ay, &az, &gx, &gy, &gz, &t) == 0) {         // read sensor data, if it exists store it in a global variable
+            taskENTER_CRITICAL();   // store gyroscope values to global variables, critical to prevent mixed old and new data [AI]
+            gyro_dps[0] = gx;
+            gyro_dps[1] = gy;
+            gyro_dps[2] = gz;
+            taskEXIT_CRITICAL();    // stop critical section [AI]
 
-        // Read sensor data
-        if (ICM42670_read_sensor_data(
-                &ax, &ay, &az,
-                &gx, &gy, &gz,
-                &temperature) == 0) {
+            // prints gyro values, for testing, commented to stop printing
+            //printf("GX: %.2f GY: %.2f GZ: %.2f \n"
+                //"AX: %.2f AY: %.2f AZ: %.2f \n",
+                //gx, gy, gz, ax, ay, az);
 
-            // Store acceleration values
-            taskENTER_CRITICAL();
-
-            accel_g[0] = ax;
-            accel_g[1] = ay;
-            accel_g[2] = az;
-
-            taskEXIT_CRITICAL();
+        } else {
+            printf("Failed to read sensor data.\n");
         }
 
-        // Wait until the next 20 ms measurement interval
-        vTaskDelayUntil(
-            &last_wake_time,
-            pdMS_TO_TICKS(LOOP_PERIOD)
+        vTaskDelayUntil(&tickTime,pdMS_TO_TICKS(LOOP_PERIOD)
         );
     }
 }
+
 
 //morseTask
 static void morse_task(void *arg){
@@ -99,9 +84,9 @@ static void morse_task(void *arg){
         vTaskDelay(pdMS_TO_TICKS(LOOP_PERIOD));
         if(symbolready) continue;   //if a symbol is ready, move to usbTask     AI?
 
-        float x = accel_g[0];       //the first value of accel_g, interpreted as x-axis value
-        float y = accel_g[1];       //the second value of accel_g, corresponding to y-axis
-        char corresponding = 0;     //corresponding symbol to the accel_g values
+        float x = gyro_dps[0];       //the first value of gyro_dps, interpreted as x-axis value
+        float y = gyro_dps[1];       //the second value of gyro_dps, corresponding to y-axis
+        char corresponding = 0;     //corresponding symbol to the gyro_dps values
 
         //the thresholds are measured using fabsf(), so both negative and positive values are taken into account
         if(fabsf(x) < VALID_DEFAULT && fabsf(y) < VALID_DEFAULT) corresponding = ' ';   //if both x and y are within the range of default pos, the symbol is space
@@ -139,19 +124,19 @@ int main() {
     init_hat_sdk();
     sleep_ms(300); //Wait some time so initialization of USB and hat is done.
 
-     TaskHandle_t myIMUTask = NULL;
+     TaskHandle_t myGyroTask = NULL;
 
     BaseType_t result = xTaskCreate(
-        imu_task,
-        "IMUTask",
+        gyro_task,
+        "GyroTask",
         DEFAULT_STACK_SIZE,
         NULL,
         2,
-        &myIMUTask
+        &myGyroTask
     );
 
     if (result != pdPASS) {
-        printf("IMU Task creation failed\n");
+        printf("Gyro Task creation failed\n");
         return 0;
     }
 

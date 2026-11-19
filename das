@@ -1,0 +1,11 @@
+core.repositoryformatversion=0
+core.filemode=true
+core.bare=false
+core.logallrefupdates=true
+remote.origin.url=https://github.com/pkeskikuru/JTKJ-PicoRTOS-ryhmae.git
+remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+branch.main.remote=origin
+branch.main.merge=refs/heads/main
+branch.main.vscode-merge-base=origin/main
+user.email=pkeskikuru@gmail.com
+user.name=PetteriKeskikuru
