@@ -15,6 +15,8 @@
 // Default stack size for the tasks. It can be reduced to 1024 if task is not using lot of memory.
 #define DEFAULT_STACK_SIZE 2048 
 
+#define CDC_ITF_TX 1
+
 #define LOOP_PERIOD 20          //morseTask loop period
 #define VALID_ROTATE_LOOPS 5      //how many loops required for a valid dot/dash symbol
 #define VALID_SPACE_LOOPS 50    //how many loops required in default position for 1 space
@@ -112,6 +114,74 @@ static void morse_task(void *arg){
             symbolready = true;
             spacecount--;               //reduce the amount of spaces that can be sent by one
         }
+    }
+}
+
+// Lähettää merkkijonon TinyUSB CDC 1 -kanavalle (CDC_ITF_TX = 1)
+static void send_cdc1_bytes(const uint8_t *data, size_t len) {
+    if (!tud_cdc_n_ready(CDC_ITF_TX) || len == 0) {
+        return;
+    }
+
+    size_t written = 0;
+    while (written < len) {
+        if (tud_cdc_n_ready(CDC_ITF_TX)) {
+            uint32_t n = tud_cdc_n_write(CDC_ITF_TX, data + written, (uint32_t)(len - written));
+            written += n;
+            tud_cdc_n_write_flush(CDC_ITF_TX);
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+    }
+}
+
+// USB-task, joka lähettää mörssätyt merkit työasemalle
+static void usb_send_task(void *pvParameters) {
+    (void)pvParameters;
+
+    char current_symbol = 0;
+    bool has_new_symbol = false;
+    int consecutive_spaces = 0;
+    bool message_terminated = false;
+
+    for (;;) {
+        has_new_symbol = false;
+
+        // Lue ja kuittaa uusi merkki turvallisesti kriittisessä osiossa
+        taskENTER_CRITICAL();
+        if (symbolready) {
+            current_symbol = symbol;
+            symbolready = false;
+            has_new_symbol = true;
+        }
+        taskEXIT_CRITICAL();
+
+        if (has_new_symbol) {
+            // Lähetä merkki ('.', '-' tai ' ') CDC 1 -kanavalle
+            send_cdc1_bytes((const uint8_t *)&current_symbol, 1);
+
+            // Seuraa välilyöntejä protokollan mukaista lopetusta ("  \n") varten
+            if (current_symbol == ' ') {
+                consecutive_spaces++;
+                if (consecutive_spaces >= 2 && !message_terminated) {
+                    const char end_seq[] = "\n"; // Kaksi välilyöntiä on jo lähetetty, lisätään '\n'
+                    send_cdc1_bytes((const uint8_t *)end_seq, 1);
+                    message_terminated = true;
+                }
+            } else {
+                consecutive_spaces = 0;
+                message_terminated = false;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+static void usbTask(void *arg) {
+    (void)arg;
+    while (1) {
+        tud_task(); // Ei vTaskDelay-kutsua tähän silmukkaan ohjeen mukaisesti
     }
 }
 
