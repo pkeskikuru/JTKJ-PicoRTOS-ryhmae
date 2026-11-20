@@ -20,8 +20,8 @@
 #define LOOP_PERIOD 20          //morseTask loop period
 #define VALID_ROTATE_LOOPS 5      //how many loops required for a valid dot/dash symbol
 #define VALID_SPACE_LOOPS 50    //how many loops required in default position for 1 space
-#define VALID_ROTATE 10.0f         //gyro_dps value threshold for a valid dot/dash      AI used to help adjust value
-#define VALID_DEFAULT 2.0f     //max variance gyro_dps value for a default position     AI used to help adjust value
+#define VALID_ROTATE 0.75f         //gyro_dps value threshold for a valid dot/dash      AI used to help adjust value
+#define VALID_DEFAULT 0.2f     //max variance gyro_dps value for a default position     AI used to help adjust value
 
 volatile float gyro_dps[3];      // gyroscope values of x, y, z in degrees per second
 volatile char symbol = ' ';     // global variable for symbol to be sent to usbTask
@@ -52,11 +52,9 @@ static void gyro_task(void *pvParameters)     // create gyro task
 
     for (;;) {      // infinite loop for the gyro task until the task is deleted or the program ends
         if (ICM42670_read_sensor_data(  &ax, &ay, &az, &gx, &gy, &gz, &t) == 0) {         // read sensor data, if it exists store it in a global variable
-            taskENTER_CRITICAL();   // store gyroscope values to global variables, critical to prevent mixed old and new data [AI]
-            gyro_dps[0] = gx;
-            gyro_dps[1] = gy;
-            gyro_dps[2] = gz;
-            taskEXIT_CRITICAL();    // stop critical section [AI]
+            gyro_dps[0] = ax;
+            gyro_dps[1] = ay;
+            gyro_dps[2] = az;
 
             // prints gyro values, for testing, commented to stop printing
             //printf("GX: %.2f GY: %.2f GZ: %.2f \n"
