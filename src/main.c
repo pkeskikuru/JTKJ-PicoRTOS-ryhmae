@@ -82,7 +82,7 @@ static void morse_task(void *arg){
     for(;;){
         
         vTaskDelay(pdMS_TO_TICKS(LOOP_PERIOD));
-        if(symbolready) continue;   //if a symbol is ready, move to usbTask     AI?
+        if(symbolready) continue;   //if a symbol is ready, move to usbTask     AI was used to help with loop logic and taskdelay placement
 
         float x = gyro_dps[0];       //the first value of gyro_dps, interpreted as x-axis value
         float y = gyro_dps[1];       //the second value of gyro_dps, corresponding to y-axis
@@ -93,7 +93,7 @@ static void morse_task(void *arg){
         else if(y > VALID_ROTATE && fabsf(x) < VALID_DEFAULT) corresponding = '.';        //if device is rotated in y-axis, the symbol is dot
         else if(x > VALID_ROTATE && fabsf(y) < VALID_DEFAULT) corresponding = '-';        //if device is rotated in x-axis, the symbol is dash
 
-        if(corresponding == 0) continue;    //skip this loop, if no valid position is found     AI?
+        if(corresponding == 0) continue;    //skip this loop, if no valid position is found     AI was used to help with loop logic
 
         if(corresponding == symbolpos) loopcount++; //if the current loop's position is the same as the previous loop's, add to loopcount
         else {
@@ -106,7 +106,8 @@ static void morse_task(void *arg){
             symbolready = true;         //a new symbol is ready to be sent to usbTask, so next loop is skipped
             spacecount = 2;             //a maximum of two spaces can be sent after a dot/dash
         }
-        //if there are spaces left to be sent, and default position is measured for at least one or two space loops   AI?
+        //if there are spaces left to be sent, and default position is measured for at least one or two space loops   AI was used to help with deciding if
+        //spaces can be sent and how many
         else if(corresponding == ' ' && spacecount > 0 && loopcount == VALID_SPACE_LOOPS || loopcount == 2 * VALID_SPACE_LOOPS) {
             symbol = ' ';
             symbolready = true;
