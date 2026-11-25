@@ -15,7 +15,6 @@
 #include <pico/stdlib.h>
 
 #include <FreeRTOS.h>
-#include <queue.h>
 #include <task.h>
 
 #include <math.h>               //for fabsf()
@@ -30,7 +29,7 @@
 // Default stack size for the tasks. It can be reduced to 1024 if task is not using lot of memory.
 #define DEFAULT_STACK_SIZE 2048 
 
-#define CDC_ITF_TX 1
+//#define CDC_ITF_TX 1
 
 #define LOOP_PERIOD 20          //morseTask loop period
 #define VALID_ROTATE_LOOPS 5      //how many loops required for a valid dot/dash symbol
@@ -121,6 +120,10 @@ static void morse_task(void *arg){
             symbolready = true;
             spacecount--;               //reduce the amount of spaces that can be sent by one
             printf("%c", symbol);
+        }
+        //if enough time passes after sending two spaces, the message ends and a newline is sent
+        else if(corresponding == ' ' && spacecount == 0 && loopcount == (4 * VALID_SPACE_LOOPS)) {
+            printf("\n");
         }
     }
 }
