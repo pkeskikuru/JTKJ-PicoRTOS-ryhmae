@@ -23,9 +23,9 @@
 
 #include "tkjhat/sdk.h"
 
-#include "usbSerialDebug/helper.h"
-#include "tusb.h"
-#include "class/cdc/cdc_device.h"
+//#include "usbSerialDebug/helper.h"
+//#include "tusb.h"
+//#include "class/cdc/cdc_device.h"
 
 // Default stack size for the tasks. It can be reduced to 1024 if task is not using lot of memory.
 #define DEFAULT_STACK_SIZE 2048 
@@ -89,7 +89,7 @@ static void morse_task(void *arg){
     for(;;){
         
         vTaskDelay(pdMS_TO_TICKS(LOOP_PERIOD));
-        if(symbolready) continue;   //if a symbol is ready, move to usbTask     AI was used to help with loop logic and taskdelay placement
+        //if(symbolready) continue;   //if a symbol is ready, move to usbTask     AI was used to help with loop logic and taskdelay placement
 
         float x = gyro_accel[0];       //the first value of gyro_accel, interpreted as x-axis value
         float y = gyro_accel[1];       //the second value of gyro_accel, corresponding to y-axis
@@ -100,7 +100,7 @@ static void morse_task(void *arg){
         else if(y > VALID_ROTATE && fabsf(x) < VALID_DEFAULT) corresponding = '.';        //if device is rotated in y-axis, the symbol is dot
         else if(x > VALID_ROTATE && fabsf(y) < VALID_DEFAULT) corresponding = '-';        //if device is rotated in x-axis, the symbol is dash
 
-        if(corresponding == 0) continue;    //skip this loop, if no valid position is found     AI was used to help with loop logic
+        //if(corresponding == 0) continue;    //skip this loop, if no valid position is found     AI was used to help with loop logic
 
         if(corresponding == symbolpos) loopcount++; //if the current loop's position is the same as the previous loop's, add to loopcount
         else {
@@ -112,17 +112,19 @@ static void morse_task(void *arg){
             symbol = corresponding;     //set the current symbol as the output symbol for usbTask
             symbolready = true;         //a new symbol is ready to be sent to usbTask, so next loop is skipped
             spacecount = 2;             //a maximum of two spaces can be sent after a dot/dash
+            printf("%c", symbol);
         }
         //if there are spaces left to be sent, and default position is measured for at least one or two space loops   AI was used to help with deciding if
         //spaces can be sent and how many
-        else if(corresponding == ' ' && spacecount > 0 && loopcount == VALID_SPACE_LOOPS || loopcount == 2 * VALID_SPACE_LOOPS) {
+        else if(corresponding == ' ' && spacecount > 0 && (loopcount == VALID_SPACE_LOOPS || loopcount == 2 * VALID_SPACE_LOOPS)) {
             symbol = ' ';
             symbolready = true;
             spacecount--;               //reduce the amount of spaces that can be sent by one
+            printf("%c", symbol);
         }
     }
 }
-
+/*
 // Lähettää tavut TinyUSB CDC 1 -kanavalle (CDC_ITF_TX = 1)
 static void send_cdc1_bytes(const uint8_t *data, size_t len) {
     if (len == 0) {
@@ -181,9 +183,10 @@ static void usbTask(void *arg) {
         }
     }
 }
-
+*/
 int main() {
-    
+    stdio_init_all();
+
     init_hat_sdk();
     sleep_ms(300); //Wait some time so initialization of USB and hat is done.
 
@@ -216,8 +219,8 @@ int main() {
         printf("Morse Task creation failed\n");
         return 0;
     }
-    
-    TaskHandle_t hUSB = NULL;
+    /*
+        TaskHandle_t hUSB = NULL;
 
     BaseType_t usb_res = xTaskCreate(
         usbTask,
@@ -241,7 +244,7 @@ int main() {
     if (!usb_serial_init()) {
         return 0;
     }
-
+*/
     // Start the scheduler (never returns)
     vTaskStartScheduler();
 
