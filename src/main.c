@@ -12,6 +12,10 @@
 
 #include "tkjhat/sdk.h"
 
+#include "usbSerialDebug/helper.h"
+#include "tusb.h"
+#include "class/cdc/cdc_device.h"
+
 // Default stack size for the tasks. It can be reduced to 1024 if task is not using lot of memory.
 #define DEFAULT_STACK_SIZE 2048 
 
@@ -116,14 +120,15 @@ static void morse_task(void *arg){
     }
 }
 
-// Lähettää merkkijonon TinyUSB CDC 1 -kanavalle (CDC_ITF_TX = 1)
+// Lähettää tavut TinyUSB CDC 1 -kanavalle (CDC_ITF_TX = 1)
 static void send_cdc1_bytes(const uint8_t *data, size_t len) {
-    if (!tud_cdc_n_ready(CDC_ITF_TX) || len == 0) {
+    if (len == 0) {
         return;
     }
 
     size_t written = 0;
     while (written < len) {
+        tud_task();
         if (tud_cdc_n_ready(CDC_ITF_TX)) {
             uint32_t n = tud_cdc_n_write(CDC_ITF_TX, data + written, (uint32_t)(len - written));
             written += n;
@@ -134,9 +139,9 @@ static void send_cdc1_bytes(const uint8_t *data, size_t len) {
     }
 }
 
-// USB-task, joka lähettää mörssätyt merkit työasemalle
-static void usb_send_task(void *pvParameters) {
-    (void)pvParameters;
+// USB-task: ajaa tud_task()-kutsun ja lähettää Morse-merkit ("  \n"-päätteellä) CDC 1:een
+static void usbTask(void *arg) {
+    (void)arg;
 
     char current_symbol = 0;
     bool has_new_symbol = false;
@@ -144,9 +149,10 @@ static void usb_send_task(void *pvParameters) {
     bool message_terminated = false;
 
     for (;;) {
+        tud_task();
+
         has_new_symbol = false;
 
-        // Lue ja kuittaa uusi merkki turvallisesti kriittisessä osiossa
         taskENTER_CRITICAL();
         if (symbolready) {
             current_symbol = symbol;
@@ -156,14 +162,12 @@ static void usb_send_task(void *pvParameters) {
         taskEXIT_CRITICAL();
 
         if (has_new_symbol) {
-            // Lähetä merkki ('.', '-' tai ' ') CDC 1 -kanavalle
             send_cdc1_bytes((const uint8_t *)&current_symbol, 1);
 
-            // Seuraa välilyöntejä protokollan mukaista lopetusta ("  \n") varten
             if (current_symbol == ' ') {
                 consecutive_spaces++;
                 if (consecutive_spaces >= 2 && !message_terminated) {
-                    const char end_seq[] = "\n"; // Kaksi välilyöntiä on jo lähetetty, lisätään '\n'
+                    const char end_seq[] = "\n";
                     send_cdc1_bytes((const uint8_t *)end_seq, 1);
                     message_terminated = true;
                 }
@@ -171,29 +175,18 @@ static void usb_send_task(void *pvParameters) {
                 consecutive_spaces = 0;
                 message_terminated = false;
             }
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
-
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
-
-static void usbTask(void *arg) {
-    (void)arg;
-    while (1) {
-        tud_task(); // Ei vTaskDelay-kutsua tähän silmukkaan ohjeen mukaisesti
     }
 }
 
 int main() {
-    stdio_init_all();
-    // Uncomment this lines if you want to wait till the serial monitor is connected
-    /*while (!stdio_usb_connected()){
-        sleep_ms(10);
-    }*/ 
+    
     init_hat_sdk();
     sleep_ms(300); //Wait some time so initialization of USB and hat is done.
 
-     TaskHandle_t myGyroTask = NULL;
+    TaskHandle_t myGyroTask = NULL;
 
     BaseType_t result = xTaskCreate(
         gyro_task,
@@ -223,6 +216,31 @@ int main() {
         return 0;
     }
     
+    TaskHandle_t hUSB = NULL;
+
+    BaseType_t usb_res = xTaskCreate(
+        usbTask,
+        "usb",
+        DEFAULT_STACK_SIZE,
+        NULL,
+        3,
+        &hUSB
+    );
+    if (usb_res != pdPASS) {
+        printf("USB Task creation failed\n");
+        return 0;
+    }
+
+#if (configNUMBER_OF_CORES > 1)
+    vTaskCoreAffinitySet(hUSB, 1u << 0);
+#endif
+
+    // Alusta TinyUSB ja usb-serial-debug (CDC0) ennen schedulerin käynnistystä
+    tusb_init();
+    if (!usb_serial_init()) {
+        return 0;
+    }
+
     // Start the scheduler (never returns)
     vTaskStartScheduler();
 
