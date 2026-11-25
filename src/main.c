@@ -1,3 +1,14 @@
+// Petteri Keskikuru
+// Aaro Sirviö
+// Sampo Suhonen
+// Pico W number 0431
+// Bonus points: Aaro Sirviö 3, Petteri Keskikuru 2, Sampo Suhonen 1
+
+// What everyone was responsible for:
+// Petteri Keskikuru: gyrotask
+// Aaro Sirviö: morsetask
+// Sampo Suhonen usbtask
+
 #include <stdio.h>
 #include <string.h>
 
@@ -24,16 +35,12 @@
 #define LOOP_PERIOD 20          //morseTask loop period
 #define VALID_ROTATE_LOOPS 5      //how many loops required for a valid dot/dash symbol
 #define VALID_SPACE_LOOPS 50    //how many loops required in default position for 1 space
-#define VALID_ROTATE 0.75f         //gyro_dps value threshold for a valid dot/dash      AI used to help adjust value
-#define VALID_DEFAULT 0.2f     //max variance gyro_dps value for a default position     AI used to help adjust value
+#define VALID_ROTATE 0.75f         //gyro_accel value threshold for a valid dot/dash      AI used to help adjust value
+#define VALID_DEFAULT 0.2f     //max variance gyro_accel value for a default position     AI used to help adjust value
 
-volatile float gyro_dps[3];      // gyroscope values of x, y, z in degrees per second
+volatile float gyro_accel[3];      // gyroscope values of x, y, z in degrees per second
 volatile char symbol = ' ';     // global variable for symbol to be sent to usbTask
 volatile bool symbolready = false;  //flag for if next symbol is ready to be sent
-
-//Add here necessary states
-enum state { IDLE=1 };
-enum state programState = IDLE;
 
 
 static void gyro_task(void *pvParameters)     // create gyro task
@@ -56,14 +63,10 @@ static void gyro_task(void *pvParameters)     // create gyro task
 
     for (;;) {      // infinite loop for the gyro task until the task is deleted or the program ends
         if (ICM42670_read_sensor_data(  &ax, &ay, &az, &gx, &gy, &gz, &t) == 0) {         // read sensor data, if it exists store it in a global variable
-            gyro_dps[0] = ax;
-            gyro_dps[1] = ay;
-            gyro_dps[2] = az;
+            gyro_accel[0] = ax;
+            gyro_accel[1] = ay;
+            gyro_accel[2] = az;
 
-            // prints gyro values, for testing, commented to stop printing
-            //printf("GX: %.2f GY: %.2f GZ: %.2f \n"
-                //"AX: %.2f AY: %.2f AZ: %.2f \n",
-                //gx, gy, gz, ax, ay, az);
 
         } else {
             printf("Failed to read sensor data.\n");
@@ -88,9 +91,9 @@ static void morse_task(void *arg){
         vTaskDelay(pdMS_TO_TICKS(LOOP_PERIOD));
         if(symbolready) continue;   //if a symbol is ready, move to usbTask     AI was used to help with loop logic and taskdelay placement
 
-        float x = gyro_dps[0];       //the first value of gyro_dps, interpreted as x-axis value
-        float y = gyro_dps[1];       //the second value of gyro_dps, corresponding to y-axis
-        char corresponding = 0;     //corresponding symbol to the gyro_dps values
+        float x = gyro_accel[0];       //the first value of gyro_accel, interpreted as x-axis value
+        float y = gyro_accel[1];       //the second value of gyro_accel, corresponding to y-axis
+        char corresponding = 0;     //corresponding symbol to the gyro_accel values
 
         //the thresholds are measured using fabsf(), so both negative and positive values are taken into account
         if(fabsf(x) < VALID_DEFAULT && fabsf(y) < VALID_DEFAULT) corresponding = ' ';   //if both x and y are within the range of default pos, the symbol is space
@@ -153,13 +156,11 @@ static void usbTask(void *arg) {
 
         has_new_symbol = false;
 
-        taskENTER_CRITICAL();
         if (symbolready) {
             current_symbol = symbol;
             symbolready = false;
             has_new_symbol = true;
         }
-        taskEXIT_CRITICAL();
 
         if (has_new_symbol) {
             send_cdc1_bytes((const uint8_t *)&current_symbol, 1);
@@ -176,7 +177,7 @@ static void usbTask(void *arg) {
                 message_terminated = false;
             }
         } else {
-            vTaskDelay(pdMS_TO_TICKS(10));
+            vTaskDelay(pdMS_TO_TICKS(LOOP_PERIOD));
         }
     }
 }
