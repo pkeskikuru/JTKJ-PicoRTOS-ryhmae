@@ -22,14 +22,16 @@
 
 #include "tkjhat/sdk.h"
 
-//#include "usbSerialDebug/helper.h"
-//#include "tusb.h"
-//#include "class/cdc/cdc_device.h"
+/*
+#include "usbSerialDebug/helper.h"
+#include "tusb.h"
+#include "class/cdc/cdc_device.h"
+*/
 
 // Default stack size for the tasks. It can be reduced to 1024 if task is not using lot of memory.
 #define DEFAULT_STACK_SIZE 2048 
 
-//#define CDC_ITF_TX 1
+//#define CDC_ITF_TX 1          //Defining CDC interface index for morse data transfer
 
 #define LOOP_PERIOD 20          //morseTask loop period
 #define VALID_ROTATE_LOOPS 25      //how many loops required for a valid dot/dash symbol
@@ -127,66 +129,67 @@ static void morse_task(void *arg){
         }
     }
 }
+
 /*
-// Lähettää tavut TinyUSB CDC 1 -kanavalle (CDC_ITF_TX = 1)
-static void send_cdc1_bytes(const uint8_t *data, size_t len) {
-    if (len == 0) {
+static void send_cdc1_bytes(const uint8_t *data, size_t len) {          //Function for data writing to TinyUSB CDC interface (AI was used to make the foundation)
+    if (len == 0) {         //Check for no data
         return;
     }
 
-    size_t written = 0;
-    while (written < len) {
-        tud_task();
-        if (tud_cdc_n_ready(CDC_ITF_TX)) {
-            uint32_t n = tud_cdc_n_write(CDC_ITF_TX, data + written, (uint32_t)(len - written));
-            written += n;
-            tud_cdc_n_write_flush(CDC_ITF_TX);
+    size_t written = 0;         //Track how many bytes have been written
+    while (written < len) {     //Loop until needed bytes are written
+        tud_task();             //Service for TinyUSB stack for transfer
+        if (tud_cdc_n_ready(CDC_ITF_TX)) {          //Check if CDC is ready
+            uint32_t n = tud_cdc_n_write(CDC_ITF_TX, data + written, (uint32_t)(len - written));            //Writing remaining bytes to CDC buffer
+            written += n;           //Increase the written data
+            tud_cdc_n_write_flush(CDC_ITF_TX);          //Flush the buffer to CDC
         } else {
-            vTaskDelay(pdMS_TO_TICKS(5));
+            vTaskDelay(pdMS_TO_TICKS(5));       //Wait to run loop again
         }
     }
 }
 
-// USB-task: ajaa tud_task()-kutsun ja lähettää Morse-merkit ("  \n"-päätteellä) CDC 1:een
+//USB task (AI was used to make the foundation)
 static void usbTask(void *arg) {
     (void)arg;
 
-    char current_symbol = 0;
-    bool has_new_symbol = false;
-    int consecutive_spaces = 0;
-    bool message_terminated = false;
+    char current_symbol = 0;            //Copy of current symbol
+    bool has_new_symbol = false;        //Indicator for new symbol
+    int consecutive_spaces = 0;         //Counter for consecutive spaces sent
+    bool message_terminated = false;    //Tracker if newline has been sent
 
-    for (;;) {
+    for (;;) {          //Loop for USB task
         tud_task();
 
-        has_new_symbol = false;
+        has_new_symbol = false;         //Reset new symbol flag
 
-        if (symbolready) {
-            current_symbol = symbol;
-            symbolready = false;
-            has_new_symbol = true;
+        if (symbolready) {          //Check from morseTask wheter a new symbol was made
+            current_symbol = symbol;            //Copy symbol
+            symbolready = false;                //Clear after getting a symbol
+            has_new_symbol = true;              //Mark for symbol being ready
         }
 
         if (has_new_symbol) {
-            send_cdc1_bytes((const uint8_t *)&current_symbol, 1);
+            send_cdc1_bytes((const uint8_t *)&current_symbol, 1);           //Transfer the symbol over CDC 
 
-            if (current_symbol == ' ') {
-                consecutive_spaces++;
-                if (consecutive_spaces >= 2 && !message_terminated) {
-                    const char end_seq[] = "\n";
-                    send_cdc1_bytes((const uint8_t *)end_seq, 1);
-                    message_terminated = true;
+            if (current_symbol == ' ') {            //Check for empty space
+                consecutive_spaces++;               //Increase the consecutive_spaces counter
+                if (consecutive_spaces >= 2 && !message_terminated) {           //After two consecutive spaces have been sent
+                    const char end_seq[] = "\n";            //Add newline to complete terminator
+                    send_cdc1_bytes((const uint8_t *)end_seq, 1);           //Transfer newline
+                    message_terminated = true;          //Mark task as complete
                 }
             } else {
-                consecutive_spaces = 0;
-                message_terminated = false;
+                consecutive_spaces = 0;         //Reset the consecutive_spaces counter
+                message_terminated = false;         //Reset the task
             }
         } else {
-            vTaskDelay(pdMS_TO_TICKS(LOOP_PERIOD));
+            vTaskDelay(pdMS_TO_TICKS(LOOP_PERIOD));         //Delay for LOOP_PERIOD before restarting
         }
     }
 }
 */
+
 int main() {
     stdio_init_all();
 
@@ -222,8 +225,9 @@ int main() {
         printf("Morse Task creation failed\n");
         return 0;
     }
+    
     /*
-        TaskHandle_t hUSB = NULL;
+    TaskHandle_t hUSB = NULL;
 
     BaseType_t usb_res = xTaskCreate(
         usbTask,
@@ -242,12 +246,11 @@ int main() {
     vTaskCoreAffinitySet(hUSB, 1u << 0);
 #endif
 
-    // Alusta TinyUSB ja usb-serial-debug (CDC0) ennen schedulerin käynnistystä
-    tusb_init();
     if (!usb_serial_init()) {
         return 0;
     }
-*/
+    */
+
     // Start the scheduler (never returns)
     vTaskStartScheduler();
 
