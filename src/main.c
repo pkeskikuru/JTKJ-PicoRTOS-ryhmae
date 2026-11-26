@@ -32,7 +32,7 @@
 //#define CDC_ITF_TX 1
 
 #define LOOP_PERIOD 20          //morseTask loop period
-#define VALID_ROTATE_LOOPS 5      //how many loops required for a valid dot/dash symbol
+#define VALID_ROTATE_LOOPS 25      //how many loops required for a valid dot/dash symbol
 #define VALID_SPACE_LOOPS 50    //how many loops required in default position for 1 space
 #define VALID_ROTATE 0.75f         //gyro_accel value threshold for a valid dot/dash      AI used to help adjust value
 #define VALID_DEFAULT 0.2f     //max variance gyro_accel value for a default position     AI used to help adjust value
