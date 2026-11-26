@@ -37,41 +37,41 @@
 #define VALID_ROTATE 0.75f         //gyro_accel value threshold for a valid dot/dash      AI used to help adjust value
 #define VALID_DEFAULT 0.2f     //max variance gyro_accel value for a default position     AI used to help adjust value
 
-volatile float gyro_accel[3];      // gyroscope values of x, y, z in degrees per second
+volatile float gyro_accel[3];      // gyroscope acceleration values of x, y, z
 volatile char symbol = ' ';     // global variable for symbol to be sent to usbTask
 volatile bool symbolready = false;  //flag for if next symbol is ready to be sent
 
 
-static void gyro_task(void *pvParameters)     // create gyro task
+static void gyro_task(void *pvParameters)     // create gyro task and define it for main() to use
 {
     (void)pvParameters;   // values as listed in ICM42670_read_sensor_data() in TKJHAT sdk.c
     float ax, ay, az;   // acceleration values
-    float gx, gy, gz;   // gyro values
+    float gx, gy, gz;   // gyro values in degrees per second
     float t;            // temperature (listed in ICM42670_read_sensor_data() function but not used)
 
-    if (init_ICM42670() != 0) {             // initialize gyro sensor
-        printf("Initialization failed.\n");   // if init fails, print error and delete task
-        vTaskDelete(NULL);
+    if (init_ICM42670() != 0) {             // AI told these 2 if statements are a good step for testing and troubleshooting
+        printf("Initialization failed.\n");   // if init fails, print error message to terminal
+        vTaskDelete(NULL);                    // and delete task to prevent it from running without sensor
     }
     if (ICM42670_start_with_default_values() != 0) {
         printf("Failed to start.\n");        // if start with default values fails, print error and delete task
         vTaskDelete(NULL);
     }
 
-    TickType_t tickTime = xTaskGetTickCount();    // initialize tick time for later use
+    TickType_t tickTime = xTaskGetTickCount();    // initialize tick time for timing in this loop
 
-    for (;;) {      // infinite loop for the gyro task until the task is deleted or the program ends
-        if (ICM42670_read_sensor_data(  &ax, &ay, &az, &gx, &gy, &gz, &t) == 0) {         // read sensor data, if it exists store it in a global variable
-            gyro_accel[0] = ax;
-            gyro_accel[1] = ay;
-            gyro_accel[2] = az;
+    for (;;) {      // infinite loop for the gyro task
+        if (ICM42670_read_sensor_data(  &ax, &ay, &az, &gx, &gy, &gz, &t) == 0) {         // reads sensor data, if it exists store it in a global variable
+            gyro_accel[0] = ax;    // first value of stored gyro values global variable
+            gyro_accel[1] = ay;    // 2nd value of gyro
+            gyro_accel[2] = az;    // 3rd value of gyro
 
 
-        } else {
-            printf("Failed to read sensor data.\n");
+        } else {                                        // if reading sensor data fails, do this      AI said this is good for troubleshooting and testing
+            printf("Failed to read sensor data.\n");    // prints error message to terminal
         }
 
-        vTaskDelayUntil(&tickTime,pdMS_TO_TICKS(LOOP_PERIOD)
+        vTaskDelayUntil(&tickTime,pdMS_TO_TICKS(LOOP_PERIOD)    // wait for LOOP_PERIOD amount of time before running loop again, ticktime used to know timings
         );
     }
 }
